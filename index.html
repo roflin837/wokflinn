@@ -570,6 +570,16 @@
                 max-width: calc(100vw - 80px); /* Paksa lebar pre tidak melebihi viewport dikurangi margin */
             }
         }
+        /* FIX: model selector cuma label, bukan dropdown */
+        .model-selector {
+            cursor: default;
+        }
+
+        .model-selector svg {
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
     </style>
 </head>
 <body>
@@ -614,8 +624,7 @@
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                 </button>
                 <div class="model-selector">
-                    FlinnAI <span class="model-ver">2.0 Pro</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="opacity: 0.5;"><path d="M6 9l6 6 6-6"/></svg>
+                    FlinnAI <span class="model-ver">1.0</span>
                 </div>
             </div>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--secondary); cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#a1a1aa'"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
@@ -667,6 +676,50 @@
 
         let isWelcomeVisible = true;
 
+        // === SAVE CHAT LOCAL ===
+        const CHAT_KEY = 'flinnai_chat_v1';
+
+        function saveChat() {
+            const messages = [];
+            document.querySelectorAll('.message').forEach(msg => {
+                messages.push({
+                    sender: msg.classList.contains('user') ? 'user' : 'ai',
+                    content: msg.querySelector('.bubble').innerHTML
+                });
+            });
+            localStorage.setItem(CHAT_KEY, JSON.stringify(messages));
+        }
+
+        function loadChat() {
+            const saved = localStorage.getItem(CHAT_KEY);
+            if (!saved) return;
+
+            const messages = JSON.parse(saved);
+            emptyState.style.display = 'none';
+            isWelcomeVisible = false;
+
+            messages.forEach(m => {
+                appendMessage(m.content, m.sender);
+            });
+        }
+
+        function typeText(element, text, speed = 18) {
+            let i = 0;
+            element.innerHTML = '';
+
+            const typing = setInterval(() => {
+                element.innerHTML += text.charAt(i);
+                i++;
+                scrollToBottom();
+
+                if (i >= text.length) {
+                    clearInterval(typing);
+                    element.innerHTML = marked.parse(text);
+                    saveChat();
+                }
+            }, speed);
+        }
+
         // --- CONFIGURE MARKED ---
         marked.setOptions({
             breaks: true,
@@ -697,6 +750,8 @@
             emptyState.offsetHeight; 
             emptyState.style.animation = 'fadeInState 0.8s ease-out';
             isWelcomeVisible = true;
+
+            localStorage.removeItem(CHAT_KEY);
             
             const newItem = document.createElement('div');
             newItem.className = 'history-item active';
@@ -761,8 +816,7 @@
                 msgDiv.appendChild(bubbleDiv);
                 chatContainer.appendChild(msgDiv);
                 
-                const rawHtml = marked.parse(text);
-                bubbleDiv.innerHTML = rawHtml;
+                typeText(bubbleDiv, text);
 
                 bubbleDiv.querySelectorAll('pre code').forEach((block) => {
                     const pre = block.parentElement;
@@ -808,6 +862,7 @@
             if (activeHistory && activeHistory.textContent === "New Conversation" && sender === 'user') {
                 activeHistory.textContent = text.substring(0, 18) + "...";
             }
+            saveChat();
         }
 
         // --- API REQUEST ---
@@ -867,8 +922,9 @@
                 
                 let answer = "No result found.";
                 if (finalStep && finalStep.content) {
-                     const contentJson = JSON.parse(finalStep.content.answer || '{}');
-                     answer = contentJson.answer || "No answer text.";
+                    const contentJson = JSON.parse(finalStep.content.answer || '{}');
+                    answer = (contentJson.answer || "No answer text.")
+                        .replace(/\s*\[\d+\]/g, '');
                 }
 
                 loadingIndicator.style.display = 'none';
@@ -889,6 +945,8 @@
         userInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSend();
         });
+
+        window.addEventListener('load', loadChat);
     </script>
 </body>
 </html>
