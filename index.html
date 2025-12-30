@@ -675,6 +675,25 @@
         const historyList = document.getElementById('history-list');
 
         let isWelcomeVisible = true;
+        
+        const AI_TIMEOUT = 15000; // 15 detik timeout AI
+
+        const SYSTEM_PROMPT = `
+        Kamu adalah FlinnAI.
+
+        Identitas:
+        - Nama: FlinnAI
+        - Versi: 1.0
+        - Bahasa utama: Indonesia
+        - Gaya bicara: santai, sopan, jelas
+        - Jangan menyebut diri sebagai ChatGPT, AI umum, atau model lain
+        - Jika ditanya siapa kamu, jawab: "Aku FlinnAI, asisten AI di workspace ini"
+
+        Aturan:
+        - Jawab ringkas tapi membantu
+        - Jangan pakai format LaTeX ($)
+        - Fokus membantu user
+        `;
 
         // === SAVE CHAT LOCAL ===
         const CHAT_KEY = 'flinnai_chat_v1';
@@ -735,6 +754,161 @@
                 return v.toString(16);
             });
         }
+
+        // --- AI PROVIDER: PERPLEXITY ---
+        async function askPerplexity(query) {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), AI_TIMEOUT);
+
+            const frontend = uuidv4();
+
+            const response = await fetch(
+                'https://api.nekolabs.web.id/px?url=https://www.perplexity.ai/rest/sse/perplexity_ask',
+                {
+                    method: 'POST',
+                    signal: controller.signal,
+                    headers: {
+                        'content-type': 'application/json',
+                        'x-request-id': frontend,
+                        'x-perplexity-request-reason': 'perplexity-query-state-provider'
+                    },
+                    body: JSON.stringify({
+                        params: {
+                            language: 'en-US',
+                            timezone: 'Asia/Jakarta',
+                            sources: ['web'],
+                            frontend_uuid: frontend,
+                            query_source: 'home',
+                            dsl_query: `${SYSTEM_PROMPT}\n\nUser: ${query}`,
+                        },
+                        query_str: `${SYSTEM_PROMPT}\n\nUser: ${query}`
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Perplexity request failed");
+            }
+
+            const data = await response.json();
+
+            // 🔥 FIX INTI ADA DI SINI
+            const lines = data.result.content
+                .split('\n')
+                .filter(l => l.startsWith('data:'));
+
+            if (!lines.length) throw new Error("No SSE data");
+
+            let finalAnswer = null;
+
+            for (const line of lines) {
+                const parsed = JSON.parse(line.slice(6));
+                if (!parsed.text) continue;
+
+                const arr = JSON.parse(parsed.text);
+                const final = arr.find(s => s.step_type === 'FINAL');
+
+                if (final) {
+                    finalAnswer = JSON.parse(final.content.answer).answer;
+                    break;
+                }
+            }
+
+            if (!finalAnswer) throw new Error("No FINAL answer");
+
+            return finalAnswer.replace(/\s*\[\d+\]/g, '');
+        }
+
+        // --- AI PROVIDER: GROQ ---
+        const GROQ_API_KEY = "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"; // boleh kosong dulu
+
+        async function askGroq(query) {
+            if (!GROQ_API_KEY) {
+                throw new Error("Groq API key not set");
+            }
+
+            const res = await fetch(
+                "https://api.groq.com/openai/v1/chat/completions",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${GROQ_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model: "llama-3.1-8b-instant",
+                       messages: [
+                            { role: "system", content: SYSTEM_PROMPT },
+                            { role: "user", content: query }
+                        ]
+                    })
+                }
+            );
+
+            if (!res.ok) {
+                throw new Error("Groq request failed");
+            }
+
+            const data = await res.json();
+            return data.choices[0].message.content;
+        }
+
+        // --- AI PROVIDER: FAKE ---
+        function fakeAI(query) {
+            const q = query.toLowerCase();
+
+            if (q.includes("halo") || q.includes("hai")) {
+                return "Halo 👋 Ada yang bisa FlinnAI bantu?";
+            }
+
+            if (q.includes("error")) {
+                return "Coba kirim pesan error-nya ya, biar aku bantu cek 👀";
+            }
+
+            if (q.includes("kode")) {
+                return "Bisa jelasin lebih detail soal kodenya? Bahasa apa?";
+            }
+
+            return "Aku belum bisa jawab itu sekarang, tapi coba jelasin lebih lengkap ya 🙂";
+        }
+
+        async function askAI(query) {
+            // 1️⃣ Coba Perplexity
+            try {
+                console.log("🧠 Using Perplexity");
+                let answer = await askPerplexity(query);
+
+                if (answer && answer.length > 5) {
+                    // 🔥 HAPUS FORMAT LATEX ($)
+                    return answer
+                        .replace(/\$\$/g, '')
+                        .replace(/\$/g, '');
+                }
+            } catch (e) {
+                console.warn("Perplexity failed:", e);
+            }
+
+            // 2️⃣ Coba Groq (kalau API ada)
+            try {
+                if (GROQ_API_KEY) {
+                    console.log("⚡ Using Groq");
+                    let answer = await askGroq(query);
+
+                    if (answer && answer.length > 5) {
+                        // 🔥 HAPUS FORMAT LATEX ($)
+                        return answer
+                            .replace(/\$\$/g, '')
+                            .replace(/\$/g, '');
+                    }
+                }
+            } catch (e) {
+                console.warn("Groq failed:", e);
+            }
+
+            // 3️⃣ Fallback terakhir
+            console.log("🤖 Using Fake AI");
+            return fakeAI(query);
+}
 
         // --- UI FUNCTIONS ---
         function toggleSidebar() {
@@ -865,7 +1039,7 @@
             saveChat();
         }
 
-        // --- API REQUEST ---
+        // --- API REQUEST (FINAL CLEAN VERSION) ---
         async function handleSend() {
             const query = userInput.value.trim();
             if (!query) return;
@@ -879,67 +1053,23 @@
             scrollToBottom();
 
             try {
-                const source = { web: true, academic: false, social: false, finance: false };
-                const sourceMapping = { web: 'web', academic: 'scholar', social: 'social', finance: 'edgar' };
-                const activeSources = Object.keys(source).filter(key => source[key] === true).map(key => sourceMapping[key]).filter(Boolean);
-                const frontend = uuidv4();
-                
-                const response = await fetch('https://api.nekolabs.web.id/px?url=https://www.perplexity.ai/rest/sse/perplexity_ask', {
-                    method: 'POST',
-                    headers: {
-                        'content-type': 'application/json',
-                        'x-request-id': frontend,
-                        'x-perplexity-request-reason': 'perplexity-query-state-provider'
-                    },
-                    body: JSON.stringify({
-                        params: {
-                            attachments: [], language: 'en-US', timezone: 'Asia/Jakarta', search_focus: 'internet',
-                            sources: activeSources.length > 0 ? activeSources : ['web'], search_recency_filter: null,
-                            frontend_uuid: frontend, mode: 'concise', model_preference: 'turbo', is_related_query: false,
-                            is_sponsored: false, visitor_id: uuidv4(), frontend_context_uuid: uuidv4(), prompt_source: 'user',
-                            query_source: 'home', is_incognito: false, time_from_first_type: 2273.9, local_search_enabled: false,
-                            use_schematized_api: true, send_back_text_in_streaming_api: false,
-                            supported_block_use_cases: ['answer_modes', 'media_items', 'knowledge_cards', 'inline_entity_cards', 'place_widgets', 'finance_widgets', 'sports_widgets', 'flight_status_widgets', 'shopping_widgets', 'jobs_widgets', 'search_result_widgets', 'clarification_responses', 'inline_images', 'inline_assets', 'inline_finance_widgets', 'placeholder_cards', 'diff_blocks', 'inline_knowledge_cards', 'entity_group_v2', 'refinement_filters', 'canvas_mode', 'maps_preview', 'answer_tabs'],
-                            client_coordinates: null, mentions: [], dsl_query: query, skip_search_enabled: true, is_nav_suggestions_disabled: false, always_search_override: false, override_no_search: false, comet_max_assistant_enabled: false, should_ask_for_mcp_tool_confirmation: true, version: '2.18'
-                        },
-                        query_str: query
-                    })
-                });
-
-                if (!response.ok) throw new Error(`Server Error: ${response.status}`);
-
-                const data = await response.json();
-                const resultText = data.result.content
-                    .split('\n')
-                    .filter(l => l.startsWith('data:'))
-                    .map(l => { try { return JSON.parse(l.slice(6)); } catch(e) { return null; } })
-                    .find(l => l && l.final_sse_message);
-
-                if (!resultText) throw new Error("Format respons tidak valid.");
-
-                const infoArray = JSON.parse(resultText.text);
-                const finalStep = infoArray.find(s => s.step_type === 'FINAL');
-                
-                let answer = "No result found.";
-                if (finalStep && finalStep.content) {
-                    const contentJson = JSON.parse(finalStep.content.answer || '{}');
-                    answer = (contentJson.answer || "No answer text.")
-                        .replace(/\s*\[\d+\]/g, '');
-                }
+                // 🔥 SATU BARIS OTAK AI
+                const answer = await askAI(query);
 
                 loadingIndicator.style.display = 'none';
                 appendMessage(answer, 'ai');
 
             } catch (error) {
                 loadingIndicator.style.display = 'none';
-                console.error("Error Details:", error);
-                appendMessage("Maaf, terjadi kesalahan saat menghubungi server.", 'ai');
+                console.error(error);
+                appendMessage("AI sedang sibuk, coba lagi nanti 🙏", 'ai');
             } finally {
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 userInput.focus();
             }
         }
+
 
         sendBtn.addEventListener('click', handleSend);
         userInput.addEventListener('keypress', (e) => {
