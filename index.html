@@ -16,20 +16,19 @@
     <style>
         /* --- 1. SYSTEM VARIABLES --- */
         :root {
-            --bg-base: #09090b;       
-            --bg-sidebar: rgba(0, 0, 0, 0.85);
-            --bg-card: #18181b;       
-            --bg-hover: #27272a;      
-            
-            --border-color: rgba(255, 255, 255, 0.1);
-            --primary: #fafafa;       
-            --secondary: #a1a1aa;     
-            --accent-glow: rgba(59, 130, 246, 0.5);
-            --purple-glow: rgba(139, 92, 246, 0.4);
+            --bg-base: #06080d;           /* hitam pekat */
+            --bg-sidebar: rgba(6, 10, 18, .92);
+            --bg-card: #0b1220;
+            --bg-hover: #111c2e;
 
-            --font-main: 'Inter', sans-serif;
-            --sidebar-width: 260px;
-            --header-height: 60px;
+            --border-color: rgba(255, 255, 255, 0.12);
+            --primary: #e5f0ff;          /* putih kebiruan */
+            --secondary: #94a3b8;
+
+            --blue-accent: #3b82f6;      /* biru */
+            --green-accent: #10b981;     /* hijau */
+            --accent-glow: rgba(59, 130, 246, 0.45);
+            --purple-glow: rgba(16, 185, 129, 0.35);
         }
 
         /* --- 2. GLOBAL RESET & ANIMATIONS --- */
@@ -64,9 +63,9 @@
             animation: floatOrb 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        .orb-1 { width: 300px; height: 300px; background: var(--accent-glow); top: -50px; left: -50px; animation-delay: 0s; }
-        .orb-2 { width: 400px; height: 400px; background: var(--purple-glow); bottom: -100px; right: -50px; animation-delay: -5s; }
-        .orb-3 { width: 200px; height: 200px; background: rgba(59, 130, 246, 0.3); top: 40%; left: 40%; animation: floatOrb 15s infinite alternate-reverse; }
+        .orb-1 { width: 300px; height: 300px; background: rgba(59, 130, 246, 0.45); top: -50px; left: -50px; animation-delay: 0s; }
+        .orb-2 { width: 400px; height: 400px; background: rgba(16, 185, 129, 0.45); bottom: -100px; right: -50px; animation-delay: -5s; }
+        .orb-3 { width: 200px; height: 200px; background: rgba(56, 189, 248, 0.35); top: 40%; left: 40%; animation: floatOrb 15s infinite alternate-reverse; }
 
         @keyframes floatOrb {
             0% { transform: translate(0, 0) scale(1); }
@@ -94,8 +93,8 @@
         }
 
         .new-chat-btn {
-            background: rgba(255, 255, 255, 0.95);
-            color: black;
+            background: linear-gradient(135deg, #3b82f6, #10b981);
+            color: white;
             border: none;
             padding: 12px 16px;
             border-radius: 12px;
@@ -107,12 +106,12 @@
             justify-content: space-between;
             transition: all 0.3s ease;
             margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 28px rgba(16, 185, 129, 0.35);
         }
         
         .new-chat-btn:hover { 
             transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.2);
+            box-shadow: 0 14px 38px rgba(16, 185, 129, 0.45);
         }
 
         .history-label {
@@ -149,8 +148,8 @@
         }
 
         .history-item:hover { 
-            background: rgba(255, 255, 255, 0.05); 
-            color: var(--primary);
+            background: rgba(59, 130, 246, 0.12);
+            color: #fff;
             transform: translateX(4px);
         }
         .history-item.active { 
@@ -322,7 +321,10 @@
             border: 1px solid rgba(255,255,255,0.1); 
             backdrop-filter: blur(5px);
         }
-        .avatar.user { background: var(--primary); color: black; }
+        .avatar.user { 
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            color: #fff;
+        }
 
         /* FIX: Bubble Styling yang Lebih Aman */
         .bubble {
@@ -333,13 +335,14 @@
         }
         
         .message.user .bubble {
-            background: #27272a;
+            background: linear-gradient(135deg, #0f172a, #0b1220);
             padding: 12px 18px;
             border-radius: 18px;
             border-top-right-radius: 4px;
-            color: var(--primary);
+            color: #e5f0ff;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             max-width: 85%;
+            border: 1px solid rgba(16,185,129,0.35);
         }
         
         .message.ai .bubble {
@@ -348,6 +351,7 @@
             flex: 1; /* Ambil sisa ruang */
             width: 100%; /* Paksa width agar merespon parent */
             overflow: hidden; /* Potong konten bandel */
+            color: #d1e0ff;
         }
 
         /* --- 5. MARKDOWN & CODE STYLING (ULTRA FIXED) --- */
@@ -676,7 +680,7 @@
 
         let isWelcomeVisible = true;
         
-        const AI_TIMEOUT = 15000; // 15 detik timeout AI
+        const AI_TIMEOUT = 15000;
 
         const SYSTEM_PROMPT = `
         Kamu adalah FlinnAI.
@@ -685,9 +689,11 @@
         - Nama: FlinnAI
         - Versi: 1.0
         - Bahasa utama: Indonesia
-        - Gaya bicara: santai, sopan, jelas
+        - Gaya bicara: santai, sopan, jelas, tengil sedikit dan kasar
+        - Kepribadian: asisten yang ramah, cerdas, tengil, kasar, dan humoris
         - Jangan menyebut diri sebagai ChatGPT, AI umum, atau model lain
         - Jika ditanya siapa kamu, jawab: "Aku FlinnAI, asisten AI di workspace ini"
+        - Buatan: Roflin Juliadi 
 
         Aturan:
         - Jawab ringkas tapi membantu
